@@ -2,7 +2,6 @@ import { TelegramClient } from 'telegram';
 import { StringSession } from 'telegram/sessions';
 import { invoke } from '@tauri-apps/api/core';
 import { appConfigDir } from '@tauri-apps/api/path';
-import { readTextFile, writeTextFile, createDir, exists } from '@tauri-apps/api/fs';
 
 // Load these from your .env file in the Tauri app
 const API_ID = parseInt(import.meta.env.VITE_TELEGRAM_API_ID || "12311784", 10);
@@ -30,14 +29,20 @@ export async function loadSession() {
     const sessionPath = `${dataDir}/session.txt`;
     
     // Check if session file exists
-    const fileExists = await exists(sessionPath);
-    if (!fileExists) {
+    try {
+      // Using invoke instead of direct fs calls
+      const fileExists = await invoke('plugin:fs|exists', { path: sessionPath });
+      if (!fileExists) {
+        return "";
+      }
+      
+      // Read session data
+      const sessionData = await invoke('plugin:fs|read_text_file', { path: sessionPath });
+      return sessionData;
+    } catch (error) {
+      console.error("File operation error:", error);
       return "";
     }
-    
-    // Read session data
-    const sessionData = await readTextFile(sessionPath);
-    return sessionData;
   } catch (error) {
     console.error("Error loading session:", error);
     return "";
@@ -51,7 +56,10 @@ export async function saveSession(sessionString) {
     
     // Create directory if it doesn't exist
     try {
-      await createDir(dataDir, { recursive: true });
+      await invoke('plugin:fs|create_dir', { 
+        path: dataDir, 
+        options: { recursive: true } 
+      });
     } catch (error) {
       // Directory might already exist
       console.log("Directory creation error (might already exist):", error);
@@ -59,7 +67,10 @@ export async function saveSession(sessionString) {
     
     // Save session data
     const sessionPath = `${dataDir}/session.txt`;
-    await writeTextFile(sessionPath, sessionString);
+    await invoke('plugin:fs|write_text_file', { 
+      path: sessionPath, 
+      contents: sessionString 
+    });
   } catch (error) {
     console.error("Error saving session:", error);
     throw error;
